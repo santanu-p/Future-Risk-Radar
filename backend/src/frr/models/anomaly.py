@@ -4,7 +4,7 @@ Stage 1 of the FRR pipeline:
     raw signal → rolling z-score → binary anomaly flag
 
 For each signal indicator, we compute:
-    z_i(t) = (x_i(t) - μ_baseline) / σ_baseline
+    z_i(t) = (x_i(t) - mu_baseline) / sigma_baseline
 
 where the baseline is the trailing N-year window.
 An anomaly is flagged when |z| > threshold.
@@ -13,18 +13,20 @@ An anomaly is flagged when |z| > threshold.
 from __future__ import annotations
 
 from collections import deque
-from datetime import datetime, timedelta, timezone
-from typing import Deque
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 import numpy as np
 import structlog
 from sklearn.ensemble import IsolationForest
 from sklearn.neighbors import LocalOutlierFactor
 from sqlalchemy import and_, delete, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from frr.config import get_settings
 from frr.db.models import AnomalyScore, SignalSeries
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = structlog.get_logger(__name__)
 
@@ -119,7 +121,7 @@ async def compute_anomaly_scores(
     baseline_years = settings.zscore_baseline_years
     threshold = settings.zscore_anomaly_threshold
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     baseline_start = now - timedelta(days=baseline_years * 365)
 
     # Fetch signals
@@ -157,7 +159,7 @@ async def compute_anomaly_scores(
 
     for (_source, _indicator), series in grouped.items():
         rolling = RollingWelford()
-        window: Deque[tuple[datetime, float]] = deque()
+        window: deque[tuple[datetime, float]] = deque()
         values = np.array([s.value for s in series], dtype=float)
         secondary_outliers = detect_secondary_outliers(values)
 

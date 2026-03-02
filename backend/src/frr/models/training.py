@@ -14,18 +14,16 @@ calendar months.  Temporal train/val/test split ensures NO future leakage.
 
 from __future__ import annotations
 
-import os
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import structlog
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as torch_functional
 from sqlalchemy import and_, func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 from torch.utils.data import DataLoader, TensorDataset
 
 from frr.config import get_settings
@@ -35,18 +33,19 @@ from frr.db.models import (
     CrisisType,
     Prediction,
     Region,
-    SignalLayer,
     SignalSeries,
 )
 from frr.db.session import get_session_factory
 from frr.models.gat import (
-    GATClassifier,
-    RegionGAT,
-    build_region_graph,
     MVP_REGION_CODES,
     SIGNAL_LAYERS,
+    GATClassifier,
+    build_region_graph,
 )
-from frr.models.lstm import CrisisLSTM, CrisisLSTMWithUncertainty
+from frr.models.lstm import CrisisLSTMWithUncertainty
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = structlog.get_logger(__name__)
 
@@ -156,10 +155,7 @@ def _build_month_range(start: datetime, end: datetime) -> list[str]:
     cur = start.replace(day=1)
     while cur < end:
         months.append(cur.strftime("%Y-%m"))
-        if cur.month == 12:
-            cur = cur.replace(year=cur.year + 1, month=1)
-        else:
-            cur = cur.replace(month=cur.month + 1)
+        cur = cur.replace(year=cur.year + 1, month=1) if cur.month == 12 else cur.replace(month=cur.month + 1)
     return months
 
 
@@ -184,9 +180,8 @@ async def build_training_dataset(
     - months:       list of YYYY-MM keys
     - indicator_names: list of feature column names
     """
-    settings = get_settings()
-    start = datetime(start_year, 1, 1, tzinfo=timezone.utc)
-    end = datetime(end_year, 12, 31, tzinfo=timezone.utc)
+    start = datetime(start_year, 1, 1, tzinfo=UTC)
+    end = datetime(end_year, 12, 31, tzinfo=UTC)
     months = _build_month_range(start, end)
 
     # Get regions
@@ -236,7 +231,7 @@ async def build_training_dataset(
                 all_features[m_idx, r_idx, len(SIGNAL_LAYERS) + i_idx] = signal_row.get(ind, 0.0)
 
             # Labels: look ahead by forecast_horizon_months
-            target_dt = datetime.strptime(month_key, "%Y-%m").replace(tzinfo=timezone.utc)
+            target_dt = datetime.strptime(month_key, "%Y-%m").replace(tzinfo=UTC)
             for fh in range(forecast_horizon_months):
                 future_dt = target_dt + timedelta(days=(fh + 1) * 30)
                 future_key = future_dt.strftime("%Y-%m")
@@ -250,16 +245,16 @@ async def build_training_dataset(
                             all_labels[m_idx, r_idx, ct_idx] = 1.0
 
     # Build LSTM sequences: sliding windows of lookback_months
-    lstm_X: list[np.ndarray] = []
+    lstm_x: list[np.ndarray] = []
     lstm_y: list[np.ndarray] = []
     for r_idx in range(num_regions):
         for t in range(lookback_months, num_months):
             seq = all_features[t - lookback_months : t, r_idx, :]  # [lookback, features]
             label = all_labels[t, r_idx, :]  # [5]
-            lstm_X.append(seq)
+            lstm_x.append(seq)
             lstm_y.append(label)
 
-    lstm_X_arr = np.array(lstm_X, dtype=np.float32) if lstm_X else np.zeros((0, lookback_months, num_features), dtype=np.float32)
+    lstm_x_arr = np.array(lstm_x, dtype=np.float32) if lstm_x else np.zeros((0, lookback_months, num_features), dtype=np.float32)
     lstm_y_arr = np.array(lstm_y, dtype=np.float32) if lstm_y else np.zeros((0, NUM_CRISIS_TYPES), dtype=np.float32)
 
     logger.info(
@@ -267,14 +262,14 @@ async def build_training_dataset(
         months=num_months,
         regions=num_regions,
         features=num_features,
-        lstm_samples=len(lstm_X),
+        lstm_samples=len(lstm_x),
         positive_labels=int(all_labels.sum()),
     )
 
     return {
         "gat_features": all_features,   # [T, R, F]
         "gat_labels": all_labels,        # [T, R, 5]
-        "lstm_sequences": lstm_X_arr,    # [N, lookback, F]
+        "lstm_sequences": lstm_x_arr,    # [N, lookback, F]
         "lstm_labels": lstm_y_arr,       # [N, 5]
         "months": months,
         "indicator_names": indicator_names,
@@ -306,13 +301,13 @@ def train_gat(
     settings = get_settings()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    T, R, F = features.shape
+    num_timesteps, num_regions_in_data, num_features_in = features.shape
     edge_index, edge_weight = build_region_graph(num_regions)
     edge_index = edge_index.to(device)
     edge_weight = edge_weight.to(device)
 
     model = GATClassifier(
-        in_features=F,
+        in_features=num_features_in,
         gat_hidden=settings.model_gnn_embedding_dim,
         gat_out=settings.model_gnn_embedding_dim // 2,
         num_crisis_types=NUM_CRISIS_TYPES,
@@ -322,7 +317,7 @@ def train_gat(
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
 
     # Temporal split: no shuffling — train on earlier months, validate on later
-    split_idx = int(T * (1 - val_split))
+    split_idx = int(num_timesteps * (1 - val_split))
     train_feat = torch.tensor(features[:split_idx], dtype=torch.float32, device=device)
     train_labels = torch.tensor(labels[:split_idx], dtype=torch.float32, device=device)
     val_feat = torch.tensor(features[split_idx:], dtype=torch.float32, device=device)
@@ -330,7 +325,7 @@ def train_gat(
 
     # Class weights for imbalanced data (crises are rare)
     pos_count = labels[:split_idx].sum(axis=(0, 1))  # [5]
-    neg_count = split_idx * R - pos_count
+    neg_count = split_idx * num_regions_in_data - pos_count
     pos_weight = torch.tensor(
         np.where(pos_count > 0, neg_count / pos_count, 10.0),
         dtype=torch.float32,
@@ -349,7 +344,7 @@ def train_gat(
             x = train_feat[t]  # [R, F]
             y = train_labels[t]  # [R, 5]
             logits = model(x, edge_index, edge_weight)  # [R, 5]
-            loss = F.binary_cross_entropy_with_logits(logits, y, pos_weight=pos_weight)
+            loss = torch_functional.binary_cross_entropy_with_logits(logits, y, pos_weight=pos_weight)
             optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -363,7 +358,7 @@ def train_gat(
         with torch.no_grad():
             for t in range(len(val_feat)):
                 logits = model(val_feat[t], edge_index, edge_weight)
-                val_loss += F.binary_cross_entropy_with_logits(
+                val_loss += torch_functional.binary_cross_entropy_with_logits(
                     logits, val_labels[t], pos_weight=pos_weight,
                 ).item()
         val_loss /= max(len(val_feat), 1)
@@ -414,7 +409,7 @@ def generate_gat_embeddings(
     embeddings : [T, R, gat_out_dim]
     """
     device = next(model.parameters()).device
-    T = features.shape[0]
+    num_timesteps = features.shape[0]
     edge_index, edge_weight = build_region_graph(num_regions)
     edge_index = edge_index.to(device)
     edge_weight = edge_weight.to(device)
@@ -424,7 +419,7 @@ def generate_gat_embeddings(
     embeddings = []
 
     with torch.no_grad():
-        for t in range(T):
+        for t in range(num_timesteps):
             x = torch.tensor(features[t], dtype=torch.float32, device=device)
             emb = encoder(x, edge_index, edge_weight)  # [R, out_dim]
             embeddings.append(emb.cpu().numpy())
@@ -459,25 +454,25 @@ def train_lstm(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     settings = get_settings()
 
-    N, lookback, F_in = sequences.shape
+    num_samples, lookback, input_dim = sequences.shape
 
     # Optionally concatenate GAT embeddings as extra features at each timestep
     if gat_embeddings is not None:
         # Repeat GAT embedding across all timesteps: [N, gat_dim] → [N, lookback, gat_dim]
         emb_repeated = np.repeat(gat_embeddings[:, np.newaxis, :], lookback, axis=1)
         sequences = np.concatenate([sequences, emb_repeated], axis=-1)
-        F_in = sequences.shape[-1]
+        input_dim = sequences.shape[-1]
 
     # Temporal split (no shuffle — prevent future leakage)
-    split = int(N * (1 - val_split))
-    X_train = torch.tensor(sequences[:split], dtype=torch.float32)
+    split = int(num_samples * (1 - val_split))
+    x_train = torch.tensor(sequences[:split], dtype=torch.float32)
     y_train = torch.tensor(labels[:split], dtype=torch.float32)
-    X_val = torch.tensor(sequences[split:], dtype=torch.float32)
+    x_val = torch.tensor(sequences[split:], dtype=torch.float32)
     y_val = torch.tensor(labels[split:], dtype=torch.float32)
 
-    train_ds = TensorDataset(X_train, y_train)
+    train_ds = TensorDataset(x_train, y_train)
     train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=False)
-    val_ds = TensorDataset(X_val, y_val)
+    val_ds = TensorDataset(x_val, y_val)
     val_dl = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
 
     # Class weights
@@ -490,7 +485,7 @@ def train_lstm(
     )
 
     model = CrisisLSTMWithUncertainty(
-        input_dim=F_in,
+        input_dim=input_dim,
         hidden_dim=settings.model_lstm_hidden_dim,
         num_layers=settings.model_lstm_num_layers,
         num_crisis_types=NUM_CRISIS_TYPES,
@@ -508,32 +503,32 @@ def train_lstm(
     for epoch in range(epochs):
         model.train()
         epoch_loss = 0.0
-        for X_batch, y_batch in train_dl:
-            X_batch = X_batch.to(device)
+        for x_batch, y_batch in train_dl:
+            x_batch = x_batch.to(device)
             y_batch = y_batch.to(device)
-            preds = model(X_batch)  # [B, 5] (sigmoid output)
+            preds = model(x_batch)  # [B, 5] (sigmoid output)
             # BCE on pre-sigmoid logits for numerical stability
             logits = torch.logit(preds.clamp(1e-6, 1 - 1e-6))
-            loss = F.binary_cross_entropy_with_logits(logits, y_batch, pos_weight=pos_weight)
+            loss = torch_functional.binary_cross_entropy_with_logits(logits, y_batch, pos_weight=pos_weight)
             optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
-            epoch_loss += loss.item() * X_batch.size(0)
+            epoch_loss += loss.item() * x_batch.size(0)
 
         # Validation
         model.eval()
         val_loss = 0.0
         with torch.no_grad():
-            for X_batch, y_batch in val_dl:
-                X_batch = X_batch.to(device)
+            for x_batch, y_batch in val_dl:
+                x_batch = x_batch.to(device)
                 y_batch = y_batch.to(device)
-                preds = model(X_batch)
+                preds = model(x_batch)
                 logits = torch.logit(preds.clamp(1e-6, 1 - 1e-6))
-                val_loss += F.binary_cross_entropy_with_logits(
+                val_loss += torch_functional.binary_cross_entropy_with_logits(
                     logits, y_batch, pos_weight=pos_weight,
-                ).item() * X_batch.size(0)
-        val_loss /= max(len(X_val), 1)
+                ).item() * x_batch.size(0)
+        val_loss /= max(len(x_val), 1)
         scheduler.step(val_loss)
 
         if val_loss < best_val_loss:
@@ -570,7 +565,7 @@ def train_bayesian(
     lstm_predictions: np.ndarray,
     features: np.ndarray,
     labels: np.ndarray,
-) -> tuple[Any, dict[str, float]]:
+) -> tuple[Any, dict[str, Any]]:
     """Train the Bayesian fusion layer.
 
     Combines LSTM predictions with anomaly features and runs NUTS
@@ -632,7 +627,7 @@ async def persist_predictions(
     if region is None:
         return 0
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     horizon = now + timedelta(days=horizon_months * 30)
 
     count = 0
@@ -721,11 +716,11 @@ async def train_pipeline(
         lstm_gat_embs: np.ndarray | None = None
         if gat_embeddings is not None:
             # gat_embeddings is [T, R, D]. LSTM samples are indexed by (region, time).
-            T, R, D = gat_embeddings.shape
+            num_timesteps, num_regions, _embedding_dim = gat_embeddings.shape
             lookback = settings.model_lookback_months
             embs: list[np.ndarray] = []
-            for r in range(R):
-                for t in range(lookback, T):
+            for r in range(num_regions):
+                for t in range(lookback, num_timesteps):
                     embs.append(gat_embeddings[t, r, :])
             lstm_gat_embs = np.array(embs, dtype=np.float32) if embs else None
 
@@ -743,12 +738,12 @@ async def train_pipeline(
         device = next(lstm_model.parameters()).device
         lstm_model.eval()
         with torch.no_grad():
-            X_tensor = torch.tensor(lstm_sequences, dtype=torch.float32, device=device)
+            x_tensor = torch.tensor(lstm_sequences, dtype=torch.float32, device=device)
             # Process in batches to avoid OOM
             chunk_size = 256
             lstm_preds_list: list[np.ndarray] = []
-            for i in range(0, len(X_tensor), chunk_size):
-                chunk = X_tensor[i : i + chunk_size]
+            for i in range(0, len(x_tensor), chunk_size):
+                chunk = x_tensor[i : i + chunk_size]
                 pred_chunk = lstm_model(chunk).cpu().numpy()
                 lstm_preds_list.append(pred_chunk)
             lstm_predictions = np.concatenate(lstm_preds_list, axis=0)
@@ -757,7 +752,7 @@ async def train_pipeline(
         extra_features = lstm_sequences[:, -1, :]  # [N, F]
 
         try:
-            fusion, bayesian_metrics = train_bayesian(
+            _fusion, bayesian_metrics = train_bayesian(
                 lstm_predictions, extra_features, lstm_labels,
             )
             results["bayesian"] = bayesian_metrics
@@ -832,11 +827,11 @@ async def train_pipeline(
                 # Use the latest data point for each region
                 # Find the last LSTM sequence for this region
                 lookback = settings.model_lookback_months
-                T = gat_features.shape[0]
-                if T <= lookback:
+                num_timesteps = gat_features.shape[0]
+                if lookback >= num_timesteps:
                     continue
 
-                last_seq = gat_features[T - lookback : T, r_idx, :]  # [lookback, F]
+                last_seq = gat_features[num_timesteps - lookback : num_timesteps, r_idx, :]  # [lookback, F]
                 last_seq_tensor = torch.tensor(
                     last_seq[np.newaxis, :, :], dtype=torch.float32, device=device,
                 )
