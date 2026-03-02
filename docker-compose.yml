@@ -1,0 +1,128 @@
+# ── Future Risk Radar — Docker Compose (Development) ──────────────────
+# Usage: docker compose up -d
+# All services: docker compose --profile full up -d
+
+services:
+  # ── TimescaleDB (PostgreSQL + time-series extension) ─────────────────
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: frr-timescaledb
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: frr
+      POSTGRES_USER: frr
+      POSTGRES_PASSWORD: frr_dev_password
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+      - ./data/init-timescaledb.sql:/docker-entrypoint-initdb.d/01-init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U frr -d frr"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: frr-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── MinIO (S3-compatible object storage) ─────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: frr-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── MLflow Tracking Server ──────────────────────────────────────────
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.19.0
+    container_name: frr-mlflow
+    ports:
+      - "5000:5000"
+    environment:
+      MLFLOW_BACKEND_STORE_URI: postgresql://frr:frr_dev_password@timescaledb:5432/frr
+      MLFLOW_DEFAULT_ARTIFACT_ROOT: s3://frr-models/
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+    command: >
+      mlflow server
+        --host 0.0.0.0
+        --port 5000
+        --backend-store-uri postgresql://frr:frr_dev_password@timescaledb:5432/frr
+        --default-artifact-root s3://frr-models/
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    profiles: ["full"]
+
+  # ── Backend API ──────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: frr-backend
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      FRR_DB_HOST: timescaledb
+      FRR_REDIS_URL: redis://redis:6379/0
+      FRR_S3_ENDPOINT: http://minio:9000
+      FRR_MLFLOW_TRACKING_URI: http://mlflow:5000
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles: ["full"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── Frontend (Vite dev server — not used in production) ──────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: dev
+    container_name: frr-frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend/src:/app/src
+    depends_on:
+      - backend
+    profiles: ["full"]
+
+volumes:
+  timescaledb_data:
+  redis_data:
+  minio_data:

@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* CESI severity colour scale */
+  --cesi-stable: #22c55e;
+  --cesi-elevated: #eab308;
+  --cesi-concerning: #f97316;
+  --cesi-high-risk: #ef4444;
+  --cesi-critical: #dc2626;
+
+  /* UI tokens */
+  --panel-bg: rgba(15, 23, 42, 0.85);
+  --panel-border: rgba(100, 116, 139, 0.3);
+  --glass-blur: 12px;
+}
+
+@layer base {
+  body {
+    @apply m-0 overflow-hidden;
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    backdrop-filter: blur(var(--glass-blur));
+    @apply rounded-xl shadow-2xl;
+  }
+
+  .severity-badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold;
+  }
+  .severity-stable      { @apply bg-green-500/20 text-green-400; }
+  .severity-elevated     { @apply bg-yellow-500/20 text-yellow-400; }
+  .severity-concerning   { @apply bg-orange-500/20 text-orange-400; }
+  .severity-high-risk    { @apply bg-red-500/20 text-red-400; }
+  .severity-critical     { @apply bg-red-600/20 text-red-300 animate-pulse; }
+}
+
+/* Alert toast slide-in animation */
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out;
+}

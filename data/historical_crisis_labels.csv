@@ -1,0 +1,59 @@
+region,crisis_type,event_date,source,notes,severity
+EAST_ASIA,currency_crisis,1997-07-02,Reinhart-Rogoff / BIS,Asian financial crisis onset (THB break),1.0
+EAST_ASIA,banking_crisis,1998-01-15,Laeven-Valencia,Regional banking sector stress,1.0
+LATAM,currency_crisis,1999-01-13,IMF WEO / BIS,Brazil real devaluation,1.0
+LATAM,sovereign_default,2001-12-23,IMF / S&P,Argentina sovereign default,1.0
+LATAM,recession,2002-03-01,IMF WEO,Post-default recession in Argentina spillover,0.8
+SOUTH_ASIA,political_unrest,2001-10-07,UCDP/PRIO,Afghanistan conflict escalation,1.0
+MENA,political_unrest,2003-03-20,UCDP/PRIO,Iraq war onset regional instability,1.0
+LATAM,political_unrest,2005-05-01,ACLED,Andean protest wave elevated,0.7
+EU,banking_crisis,2008-09-15,Laeven-Valencia,Global financial crisis transmission,1.0
+EU,recession,2008-10-01,Eurostat/CEPR,Euro area recession onset,1.0
+MENA,political_unrest,2008-12-01,SIPRI,Energy-security stress proxy,0.6
+EAST_ASIA,recession,2008-12-01,IMF WEO,Trade contraction downturn,0.9
+LATAM,recession,2009-01-01,IMF WEO,Commodity shock downturn,0.8
+EU,sovereign_default,2010-04-27,S&P,Major euro sovereign downgrade/default cycle,1.0
+MENA,political_unrest,2011-01-14,UCDP/ACLED,Arab Spring Tunisia phase,1.0
+MENA,political_unrest,2011-02-11,UCDP/ACLED,Arab Spring Egypt phase,1.0
+EU,recession,2011-11-01,Eurostat,Eurozone sovereign crisis recession phase,1.0
+EU,banking_crisis,2012-06-09,Laeven-Valencia,Spain banking bailout stress,1.0
+MENA,political_unrest,2012-07-01,UCDP/ACLED,Syria conflict intensification,1.0
+SOUTH_ASIA,currency_crisis,2013-08-28,BIS,INR taper-tantrum depreciation stress,0.8
+LATAM,currency_crisis,2014-01-24,BIS,Argentina peso selloff,0.9
+EU,political_unrest,2014-03-01,UCDP/PRIO,Eastern Europe conflict shock spillover,0.8
+LATAM,recession,2015-08-01,IMF WEO,Brazil recession,1.0
+MENA,political_unrest,2015-09-01,UCDP/ACLED,Yemen conflict escalation,0.9
+EU,political_unrest,2016-06-24,GDELT/Brexit timeline,Brexit shock and protests,0.7
+LATAM,political_unrest,2017-07-01,ACLED,Venezuela unrest wave,0.9
+SOUTH_ASIA,currency_crisis,2018-10-01,BIS,Pakistan FX stress episode,0.8
+LATAM,currency_crisis,2018-09-01,BIS,Argentina peso crisis,1.0
+LATAM,sovereign_default,2019-08-28,S&P,Argentina selective default cycle,1.0
+MENA,political_unrest,2019-10-01,ACLED,Iraq/Lebanon protest escalation,0.9
+EU,recession,2020-03-15,IMF WEO,COVID recession onset,1.0
+EAST_ASIA,recession,2020-01-23,IMF WEO,Early pandemic shutdown shock,1.0
+LATAM,recession,2020-04-01,IMF WEO,Pandemic recession phase,1.0
+SOUTH_ASIA,recession,2020-04-01,IMF WEO,Pandemic recession phase,0.9
+LATAM,sovereign_default,2020-05-22,IMF / S&P,Argentina default event,1.0
+MENA,political_unrest,2020-04-20,EIA,Oil price shock regime break,0.8
+EU,political_unrest,2021-10-01,EIA/ENTSO-E,European gas-price social unrest proxy,0.7
+MENA,political_unrest,2021-11-01,UCDP/ACLED,Regional militia escalation,0.8
+EU,recession,2022-03-01,Eurostat,Energy shock inflation/recession regime,0.7
+SOUTH_ASIA,currency_crisis,2022-04-12,IMF/BIS,Sri Lanka FX collapse,1.0
+SOUTH_ASIA,sovereign_default,2022-05-18,S&P/IMF,Sri Lanka sovereign default,1.0
+SOUTH_ASIA,political_unrest,2022-07-09,ACLED,Sri Lanka unrest and leadership change,1.0
+EU,political_unrest,2022-09-01,EIA/ENTSO-E,Energy crisis protest pressure,0.8
+EU,recession,2022-10-01,Eurostat,Energy-induced contraction period,0.8
+LATAM,political_unrest,2022-12-07,ACLED,Peru unrest escalation,0.8
+EU,banking_crisis,2023-03-15,BIS / ECB,Global banking stress transmission,0.9
+LATAM,currency_crisis,2023-11-01,BIS,Argentina election-period FX stress,0.8
+MENA,political_unrest,2023-10-07,UCDP/PRIO,Regional conflict escalation,1.0
+EAST_ASIA,political_unrest,2024-01-13,ACLED,Taiwan Strait tension signal,0.6
+EU,recession,2024-02-01,Eurostat,Industrial slowdown recession risk,0.7
+LATAM,sovereign_default,2024-05-15,IMF watchlist,High debt distress warning event,0.6
+SOUTH_ASIA,political_unrest,2024-08-01,ACLED,Bangladesh protest wave,0.7
+MENA,political_unrest,2024-09-01,EIA,Shipping corridor and energy disruption unrest signal,0.8
+EAST_ASIA,recession,2025-01-01,IMF WEO,Manufacturing cycle downturn,0.6
+EU,currency_crisis,2025-02-01,BIS,Peripheral FX/debt stress pulse,0.5
+LATAM,recession,2025-03-01,IMF WEO,Commodity down-cycle slowdown,0.7
+SOUTH_ASIA,currency_crisis,2025-04-01,BIS,External-balance pressure episode,0.6
+MENA,political_unrest,2025-05-01,UCDP/ACLED,Persistent conflict spillover,0.8
