@@ -1,5 +1,3 @@
-import { useAppStore } from "../store/appStore";
-
 export default function Header() {
   return (
     <header className="glass-panel flex h-14 items-center justify-between border-b border-slate-700/50 px-6">
@@ -16,7 +14,7 @@ export default function Header() {
       </div>
 
       <div className="flex items-center gap-4 text-sm text-gray-400">
-        <span>CESI Engine v0.1.0</span>
+        <span>CESI Engine v0.3.0</span>
         <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
         <span>Live</span>
       </div>

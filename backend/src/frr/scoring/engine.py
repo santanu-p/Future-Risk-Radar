@@ -327,4 +327,16 @@ async def compute_all_cesi(model_version: str = "v0.1.0") -> list[CESIScore]:
         logger.debug("WebSocket publish skipped", error=str(e))
 
     logger.info("CESI scoring complete", regions_scored=len(scores))
+
+    # ── Evaluate alert rules ──────────────────────────────────────────
+    try:
+        from frr.services.alerting import evaluate_alerts
+
+        async with factory() as session:
+            fired = await evaluate_alerts(session)
+            if fired:
+                logger.info("Alerts evaluated after scoring", alerts_fired=fired)
+    except Exception as e:
+        logger.debug("Alert evaluation skipped", error=str(e))
+
     return scores

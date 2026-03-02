@@ -6,7 +6,7 @@ from fastapi import APIRouter
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from frr.api.deps import DbSession
+from frr.api.deps import CurrentUser, DbSession, TenantOrg, get_tenant_region_filter
 from frr.api.schemas import RegionOut, RegionSummary
 from frr.db.models import CESIScore, Region
 
@@ -14,11 +14,19 @@ router = APIRouter()
 
 
 @router.get("/", response_model=list[RegionSummary])
-async def list_regions(db: DbSession) -> list[RegionSummary]:
-    """All active regions with their latest CESI score (dashboard list)."""
-    result = await db.execute(
-        select(Region).where(Region.active.is_(True)).order_by(Region.code)
-    )
+async def list_regions(db: DbSession, user: CurrentUser = None, org: TenantOrg = None) -> list[RegionSummary]:
+    """All active regions with their latest CESI score (dashboard list).
+
+    Multi-tenant: results are filtered to the user's organization's allowed regions.
+    """
+    query = select(Region).where(Region.active.is_(True)).order_by(Region.code)
+
+    # Apply tenant region filter
+    allowed_regions = get_tenant_region_filter(org)
+    if allowed_regions:
+        query = query.where(Region.code.in_(allowed_regions))
+
+    result = await db.execute(query)
     regions = result.scalars().all()
 
     summaries: list[RegionSummary] = []

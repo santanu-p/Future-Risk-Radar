@@ -1,0 +1,27 @@
+apiVersion: v2
+name: future-risk-radar
+description: Predictive global risk intelligence — structural stress detection system
+type: application
+version: 0.3.0
+appVersion: "0.3.0"
+keywords:
+  - risk-intelligence
+  - geopolitics
+  - timescaledb
+  - machine-learning
+  - fastapi
+maintainers:
+  - name: FRR Team
+home: https://github.com/your-org/future-risk-radar
+sources:
+  - https://github.com/your-org/future-risk-radar
+dependencies:
+  - name: redis
+    version: "18.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled
+  - name: postgresql
+    version: "14.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
+    alias: timescaledb

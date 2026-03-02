@@ -1,6 +1,6 @@
 [project]
 name = "future-risk-radar"
-version = "0.1.0"
+version = "0.3.0"
 description = "Predictive global risk intelligence platform — structural stress detection system"
 requires-python = ">=3.12"
 license = "AGPL-3.0-only"
@@ -87,11 +87,25 @@ prometheus-client = ">=0.21"
 python-jose = { version = ">=3.3", extras = ["cryptography"] }
 passlib = { version = ">=1.7", extras = ["bcrypt"] }
 
+# PDF report generation
+jinja2 = ">=3.1"
+weasyprint = ">=62.0"
+
+# Email
+aiosmtplib = ">=3.0"
+
+# NLP
+transformers = { version = ">=4.45", optional = true }
+tokenizers = { version = ">=0.20", optional = true }
+
 # Utilities
 orjson = ">=3.10"
 python-dotenv = ">=1.0"
 structlog = ">=24.4"
 tenacity = ">=9.0"
+
+[project.optional-dependencies]
+nlp = ["transformers>=4.45", "tokenizers>=0.20"]
 
 # ── Tool Configuration ─────────────────────────────────────────────────
 [tool.ruff]

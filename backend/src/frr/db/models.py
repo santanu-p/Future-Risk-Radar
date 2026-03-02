@@ -2,6 +2,7 @@
 
 Table Hierarchy
 ===============
+- Organization    — multi-tenant isolation boundary
 - Region          — geographic/economic blocs (EU, MENA, …)
 - SignalSeries    — raw time-series from ingestion (one row per source × date × region)
 - AnomalyScore   — z-score anomaly per signal
@@ -9,7 +10,12 @@ Table Hierarchy
 - CESIScore       — composite CESI output per region per run
 - CrisisLabel     — ground-truth labels for supervised training
 - AuditLog        — change tracking for compliance
-- User            — auth accounts (MVP: simple JWT)
+- User            — auth accounts with RBAC roles
+- ApiKey          — long-lived API keys for programmatic access
+- AlertRule       — configurable alert thresholds per region/crisis-type
+- AlertHistory    — triggered alert records
+- DriftSnapshot   — model monitoring / data drift snapshots
+- ReportJob       — generated intelligence brief records
 """
 
 from __future__ import annotations
@@ -68,6 +74,56 @@ class SeverityBand(str, PyEnum):
     CONCERNING = "concerning"      # 41–60
     HIGH_RISK = "high_risk"        # 61–80
     CRITICAL = "critical"          # 81–100
+
+
+class UserRole(str, PyEnum):
+    """Role-based access control levels."""
+    VIEWER = "viewer"              # Read-only access
+    ANALYST = "analyst"            # Read + export + alert config
+    ADMIN = "admin"                # Full org-level management
+    SUPER_ADMIN = "super_admin"    # System-wide (FRR staff only)
+
+
+class AlertChannel(str, PyEnum):
+    """Notification delivery channel for alert rules."""
+    EMAIL = "email"
+    SLACK = "slack"
+    WEBHOOK = "webhook"
+    WEBSOCKET = "websocket"
+
+
+class ReportFormat(str, PyEnum):
+    PDF = "pdf"
+    HTML = "html"
+
+
+class DriftType(str, PyEnum):
+    DATA_DRIFT = "data_drift"
+    PREDICTION_DRIFT = "prediction_drift"
+    FEATURE_IMPORTANCE = "feature_importance"
+
+
+# ── Organization (multi-tenant boundary) ──────────────────────────────
+
+class Organization(Base):
+    """Tenant isolation boundary — each org sees only its allowed regions."""
+
+    __tablename__ = "organizations"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(256), unique=True, nullable=False)
+    slug: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    allowed_regions: Mapped[dict] = mapped_column(
+        JSONB, default=list, doc="List of region codes this org can access; empty = all"
+    )
+    settings: Mapped[dict] = mapped_column(JSONB, default=dict, doc="Org-level config overrides")
+    tier: Mapped[str] = mapped_column(String(32), default="professional", doc="open|professional|enterprise")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    users: Mapped[list["User"]] = relationship(back_populates="organization", cascade="all, delete-orphan")
+    api_keys: Mapped[list["ApiKey"]] = relationship(back_populates="organization", cascade="all, delete-orphan")
 
 
 # ── Region ─────────────────────────────────────────────────────────────
@@ -221,18 +277,23 @@ class AuditLog(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    actor: Mapped[str] = mapped_column(String(128), nullable=False, doc="user email or 'system'")
-    action: Mapped[str] = mapped_column(String(64), nullable=False, doc="e.g. ingest, score, login")
-    entity_type: Mapped[str | None] = mapped_column(String(64))
-    entity_id: Mapped[str | None] = mapped_column(String(128))
+    user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    actor: Mapped[str] = mapped_column(String(128), nullable=False, default="system", doc="user email or 'system'")
+    action: Mapped[str] = mapped_column(String(64), nullable=False, doc="HTTP method or action name")
+    resource: Mapped[str | None] = mapped_column(String(64), doc="Resource type e.g. 'regions', 'alerts'")
+    resource_id: Mapped[str | None] = mapped_column(String(128), doc="UUID of affected resource")
+    entity_type: Mapped[str | None] = mapped_column(String(64), doc="Legacy: maps to resource")
+    entity_id: Mapped[str | None] = mapped_column(String(128), doc="Legacy: maps to resource_id")
     detail: Mapped[dict] = mapped_column(JSONB, default=dict)
+    ip_address: Mapped[str | None] = mapped_column(String(45))
     ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 # ── User ───────────────────────────────────────────────────────────────
 
 class User(Base):
-    """Application user for JWT auth (MVP: simple local accounts)."""
+    """Application user with RBAC roles and organization membership."""
 
     __tablename__ = "users"
 
@@ -240,7 +301,153 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(256), unique=True, nullable=False, index=True)
     hashed_password: Mapped[str] = mapped_column(String(256), nullable=False)
     full_name: Mapped[str | None] = mapped_column(String(256))
+    role: Mapped[UserRole] = mapped_column(
+        Enum(UserRole, name="user_role"), default=UserRole.VIEWER, nullable=False
+    )
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("organizations.id"), nullable=True
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_login: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    organization: Mapped["Organization | None"] = relationship(back_populates="users")
+
+
+# ── ApiKey ─────────────────────────────────────────────────────────────
+
+class ApiKey(Base):
+    """Long-lived API keys for programmatic / M2M access."""
+
+    __tablename__ = "api_keys"
+    __table_args__ = (
+        Index("ix_apikey_key_hash", "key_hash"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(128), nullable=False, doc="Human-readable label")
+    key_prefix: Mapped[str] = mapped_column(String(12), nullable=False, doc="First 8 chars for identification")
+    key_hash: Mapped[str] = mapped_column(String(256), nullable=False, doc="SHA-256 hash of the full key")
+    scopes: Mapped[dict] = mapped_column(JSONB, default=list, doc='e.g. ["read:cesi","read:signals"]')
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    organization: Mapped["Organization"] = relationship(back_populates="api_keys")
+
+
+# ── AlertRule ──────────────────────────────────────────────────────────
+
+class AlertRule(Base):
+    """Configurable alert threshold — fires when conditions are met."""
+
+    __tablename__ = "alert_rules"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("organizations.id"), nullable=True)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    name: Mapped[str] = mapped_column(String(256), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+
+    # Condition
+    region_code: Mapped[str | None] = mapped_column(String(32), doc="NULL = all regions")
+    crisis_type: Mapped[CrisisType | None] = mapped_column(
+        Enum(CrisisType, name="crisis_type", create_type=False), nullable=True
+    )
+    metric: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="cesi_score",
+        doc="cesi_score | crisis_probability | anomaly_zscore"
+    )
+    operator: Mapped[str] = mapped_column(String(8), nullable=False, default=">=", doc=">= | <= | > | < | ==")
+    threshold: Mapped[float] = mapped_column(Float, nullable=False)
+
+    # Delivery
+    channel: Mapped[AlertChannel] = mapped_column(
+        Enum(AlertChannel, name="alert_channel"), nullable=False, default=AlertChannel.WEBSOCKET
+    )
+    channel_config: Mapped[dict] = mapped_column(
+        JSONB, default=dict, doc='e.g. {"webhook_url":"..."} or {"slack_channel":"#alerts"}'
+    )
+    cooldown_minutes: Mapped[int] = mapped_column(Integer, default=60, doc="Min minutes between re-fires")
+
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_fired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    alerts_fired: Mapped[list["AlertHistory"]] = relationship(back_populates="rule", cascade="all, delete-orphan")
+
+
+# ── AlertHistory ──────────────────────────────────────────────────────
+
+class AlertHistory(Base):
+    """Record of a triggered alert."""
+
+    __tablename__ = "alert_history"
+    __table_args__ = (
+        Index("ix_alert_history_ts", "fired_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    rule_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("alert_rules.id"), nullable=False)
+    region_code: Mapped[str] = mapped_column(String(32), nullable=False)
+    metric_value: Mapped[float] = mapped_column(Float, nullable=False)
+    threshold: Mapped[float] = mapped_column(Float, nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    channel: Mapped[AlertChannel] = mapped_column(
+        Enum(AlertChannel, name="alert_channel", create_type=False), nullable=False
+    )
+    delivered: Mapped[bool] = mapped_column(Boolean, default=False)
+    delivery_error: Mapped[str | None] = mapped_column(Text)
+    fired_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    rule: Mapped["AlertRule"] = relationship(back_populates="alerts_fired")
+
+
+# ── DriftSnapshot (model monitoring) ──────────────────────────────────
+
+class DriftSnapshot(Base):
+    """Periodic snapshot of data drift, prediction drift, and feature importance."""
+
+    __tablename__ = "drift_snapshots"
+    __table_args__ = (
+        Index("ix_drift_ts", "computed_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    drift_type: Mapped[DriftType] = mapped_column(
+        Enum(DriftType, name="drift_type"), nullable=False
+    )
+    region_code: Mapped[str | None] = mapped_column(String(32))
+    model_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    metrics: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, doc="PSI, KL divergence, wasserstein, etc."
+    )
+    alert_triggered: Mapped[bool] = mapped_column(Boolean, default=False)
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# ── ReportJob ─────────────────────────────────────────────────────────
+
+class ReportJob(Base):
+    """Generated intelligence brief record."""
+
+    __tablename__ = "report_jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("organizations.id"), nullable=True)
+    region_code: Mapped[str | None] = mapped_column(String(32), doc="NULL = global report")
+    report_format: Mapped[ReportFormat] = mapped_column(
+        Enum(ReportFormat, name="report_format"), nullable=False
+    )
+    period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="pending", doc="pending|generating|completed|failed")
+    file_path: Mapped[str | None] = mapped_column(String(512), doc="S3/MinIO object key")
+    file_size_bytes: Mapped[int | None] = mapped_column(Integer)
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

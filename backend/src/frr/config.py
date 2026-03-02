@@ -141,7 +141,34 @@ class Settings(BaseSettings):
     propagation_hops: int = 3
     propagation_spike_threshold: float = 40.0
 
-    # ── Regions (MVP) ──────────────────────────────────────────────────
+    # ── Alerting ───────────────────────────────────────────────────────
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: SecretStr = SecretStr("")
+    smtp_from_email: str = "alerts@futureriskradar.io"
+    smtp_use_tls: bool = True
+    slack_default_webhook_url: str = ""
+
+    # ── Reports ────────────────────────────────────────────────────────
+    reports_s3_bucket: str = "frr-reports"
+    reports_retention_days: int = 90
+
+    # ── Model Monitoring ───────────────────────────────────────────────
+    drift_psi_threshold: float = 0.2
+    drift_check_interval_hours: int = 24
+
+    # ── SHAP Explainability ────────────────────────────────────────────
+    shap_background_samples: int = 100
+    shap_max_features: int = 20
+
+    # ── NLP / GDELT ────────────────────────────────────────────────────
+    gdelt_scan_interval_minutes: int = 60
+    gdelt_max_articles_per_scan: int = 500
+    nlp_classifier_model: str = "distilbert-base-uncased"
+    nlp_confidence_threshold: float = 0.65
+
+    # ── Regions ────────────────────────────────────────────────────────
     mvp_regions: list[str] = Field(
         default=[
             "EU",
@@ -149,6 +176,17 @@ class Settings(BaseSettings):
             "EAST_ASIA",
             "SOUTH_ASIA",
             "LATAM",
+            "NORTH_AMERICA",
+            "SUB_SAHARAN_AFRICA",
+            "SOUTHEAST_ASIA",
+            "CENTRAL_ASIA",
+            "OCEANIA",
+            "EASTERN_EUROPE",
+            "NORDIC",
+            "GULF_STATES",
+            "CARIBBEAN",
+            "CENTRAL_AMERICA",
+            "SOUTHERN_AFRICA",
         ]
     )
 

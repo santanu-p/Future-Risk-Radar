@@ -8,7 +8,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
-from frr.api.deps import DbSession
+from frr.api.deps import CurrentUser, DbSession, TenantOrg, get_tenant_region_filter
 from frr.api.schemas import (
     CESIHistoryPoint,
     CESIRegionDetail,
@@ -22,11 +22,17 @@ router = APIRouter()
 
 
 @router.get("/scores", response_model=list[CESIScoreOut])
-async def latest_scores(db: DbSession) -> list[CESIScore]:
-    """Latest CESI score for every active region — powers the globe heatmap."""
-    regions_result = await db.execute(
-        select(Region).where(Region.active.is_(True))
-    )
+async def latest_scores(db: DbSession, user: CurrentUser = None, org: TenantOrg = None) -> list[CESIScore]:
+    """Latest CESI score for every active region — powers the globe heatmap.
+
+    Multi-tenant: results are filtered to the user's organization's allowed regions.
+    """
+    query = select(Region).where(Region.active.is_(True))
+    allowed_regions = get_tenant_region_filter(org)
+    if allowed_regions:
+        query = query.where(Region.code.in_(allowed_regions))
+
+    regions_result = await db.execute(query)
     regions = regions_result.scalars().all()
 
     scores: list[CESIScore] = []

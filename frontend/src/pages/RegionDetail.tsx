@@ -224,6 +224,24 @@ export default function RegionDetail() {
           simultaneously, indicating correlated structural stress.
         </div>
       )}
+
+      {/* Phase 3: SHAP explainability link */}
+      {regionCode && (
+        <div className="flex gap-3">
+          <Link
+            to={`/explain/${regionCode}`}
+            className="btn-secondary text-sm"
+          >
+            🔍 View SHAP Explanation
+          </Link>
+          <Link
+            to="/news"
+            className="btn-secondary text-sm"
+          >
+            📡 News Intel Feed
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,0 +1,176 @@
+# ── Future Risk Radar — Helm Values ───────────────────────────────────
+# Override these values for each environment (dev / staging / production).
+
+global:
+  environment: production
+  imagePullSecrets: []
+
+# ── Backend ────────────────────────────────────────────────────────────
+backend:
+  replicaCount: 2
+  image:
+    repository: ghcr.io/your-org/frr-backend
+    tag: "0.3.0"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8000
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 4Gi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilization: 70
+    targetMemoryUtilization: 80
+  env:
+    FRR_ENVIRONMENT: production
+    FRR_DEBUG: "false"
+    FRR_LOG_LEVEL: INFO
+    FRR_WORKERS: "4"
+    FRR_DB_POOL_SIZE: "30"
+  envFromSecrets:
+    - frr-secrets
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8000
+    initialDelaySeconds: 15
+    periodSeconds: 30
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 8000
+    initialDelaySeconds: 10
+    periodSeconds: 10
+
+# ── Frontend ───────────────────────────────────────────────────────────
+frontend:
+  replicaCount: 2
+  image:
+    repository: ghcr.io/your-org/frr-frontend
+    tag: "0.3.0"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilization: 80
+
+# ── Ingress ────────────────────────────────────────────────────────────
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/websocket-services: frr-backend
+  hosts:
+    - host: frr.example.com
+      paths:
+        - path: /api
+          pathType: Prefix
+          service: backend
+        - path: /ws
+          pathType: Prefix
+          service: backend
+        - path: /metrics
+          pathType: Prefix
+          service: backend
+        - path: /
+          pathType: Prefix
+          service: frontend
+  tls:
+    - secretName: frr-tls
+      hosts:
+        - frr.example.com
+
+# ── TimescaleDB (external or bundled) ─────────────────────────────────
+postgresql:
+  enabled: false  # Use external TimescaleDB in production
+timescaledb:
+  host: timescaledb.database.svc.cluster.local
+  port: 5432
+  database: frr
+  existingSecret: frr-db-secret
+
+# ── Redis ──────────────────────────────────────────────────────────────
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: false
+  master:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+# ── MinIO / S3 ────────────────────────────────────────────────────────
+minio:
+  enabled: false  # Use external S3 in production
+  endpoint: "https://s3.amazonaws.com"
+  existingSecret: frr-s3-secret
+
+# ── MLflow ─────────────────────────────────────────────────────────────
+mlflow:
+  enabled: true
+  trackingUri: "http://mlflow:5000"
+
+# ── Secrets (reference names — create via kubectl or external-secrets) ─
+secrets:
+  name: frr-secrets
+  # Keys expected in the secret:
+  # FRR_DB_PASSWORD, FRR_JWT_SECRET, FRR_S3_SECRET_KEY,
+  # FRR_SMTP_PASSWORD, FRR_FRED_API_KEY, FRR_EIA_API_KEY, etc.
+
+# ── Monitoring ─────────────────────────────────────────────────────────
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  path: /metrics
+
+# ── CronJobs ──────────────────────────────────────────────────────────
+cronJobs:
+  modelTraining:
+    schedule: "0 3 * * *"   # Daily at 03:00 UTC
+    image: ghcr.io/your-org/frr-backend:0.3.0
+    command: ["python", "-m", "frr.tasks.train"]
+    resources:
+      requests:
+        cpu: "2"
+        memory: 8Gi
+      limits:
+        cpu: "4"
+        memory: 16Gi
+  reportGeneration:
+    schedule: "0 6 1 * *"   # Monthly on the 1st at 06:00 UTC
+    image: ghcr.io/your-org/frr-backend:0.3.0
+    command: ["python", "-m", "frr.tasks.monthly_report"]
+    resources:
+      requests:
+        cpu: 500m
+        memory: 2Gi
+
+# ── Network Policy ────────────────────────────────────────────────────
+networkPolicy:
+  enabled: true

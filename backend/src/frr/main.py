@@ -83,6 +83,13 @@ def create_app() -> FastAPI:
     from frr.api.auth import router as auth_router
     from frr.api.websocket import router as ws_router
     from frr.api.training import router as training_router
+    from frr.api.alerts import router as alerts_router
+    from frr.api.reports import router as reports_router
+    from frr.api.organizations import router as org_router
+    from frr.api.audit import router as audit_router
+    from frr.api.monitoring import router as monitoring_router
+    from frr.api.explainability import router as explain_router
+    from frr.api.nlp import router as nlp_router
 
     prefix = f"/api/{settings.api_version}"
     app.include_router(health_router, tags=["health"])
@@ -91,7 +98,18 @@ def create_app() -> FastAPI:
     app.include_router(signals_router, prefix=f"{prefix}/signals", tags=["signals"])
     app.include_router(cesi_router, prefix=f"{prefix}/cesi", tags=["cesi"])
     app.include_router(training_router, prefix=prefix, tags=["training"])
+    app.include_router(alerts_router, prefix=prefix, tags=["alerts"])
+    app.include_router(reports_router, prefix=prefix, tags=["reports"])
+    app.include_router(org_router, prefix=prefix, tags=["organizations"])
+    app.include_router(audit_router, prefix=prefix, tags=["audit"])
+    app.include_router(monitoring_router, prefix=prefix, tags=["monitoring"])
+    app.include_router(explain_router, prefix=prefix, tags=["explainability"])
+    app.include_router(nlp_router, prefix=prefix, tags=["nlp"])
     app.include_router(ws_router, tags=["websocket"])
+
+    # ── Audit logging middleware ───────────────────────────────────────
+    from frr.middleware.audit import AuditLogMiddleware
+    app.add_middleware(AuditLogMiddleware)
 
     return app
 

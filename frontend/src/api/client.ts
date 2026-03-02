@@ -116,6 +116,150 @@ export interface BacktestResult {
   }>;
 }
 
+// ── Phase 3 Types ─────────────────────────────────────────────────────
+
+export interface AlertRule {
+  id: string;
+  region_code: string | null;
+  metric: string;
+  operator: string;
+  threshold: number;
+  channels: string[];
+  cooldown_minutes: number;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AlertRuleCreate {
+  region_code?: string | null;
+  metric: string;
+  operator: string;
+  threshold: number;
+  channels: string[];
+  cooldown_minutes?: number;
+}
+
+export interface AlertRuleUpdate {
+  metric?: string;
+  operator?: string;
+  threshold?: number;
+  channels?: string[];
+  cooldown_minutes?: number;
+  enabled?: boolean;
+}
+
+export interface AlertHistory {
+  id: string;
+  rule_id: string;
+  region_code: string;
+  metric: string;
+  value: number;
+  threshold: number;
+  channels: string[];
+  fired_at: string;
+}
+
+export interface ReportJob {
+  id: string;
+  region_code: string;
+  format: string;
+  status: string;
+  s3_key: string | null;
+  error: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface ReportJobCreate {
+  region_code: string;
+  format?: string;
+}
+
+export interface DriftSnapshot {
+  id: string;
+  drift_type: string;
+  region_code: string | null;
+  layer: string | null;
+  psi: number | null;
+  ks_stat: number | null;
+  js_divergence: number | null;
+  alert: boolean;
+  details: Record<string, unknown>;
+  checked_at: string;
+}
+
+export interface ModelHealthSummary {
+  total_checks_7d: number;
+  alerts_7d: number;
+  alert_rate: number;
+  by_type: Record<string, { total: number; alerts: number }>;
+}
+
+export interface SHAPExplanation {
+  region_code: string;
+  cesi_score: number | null;
+  features: Array<{
+    feature: string;
+    shap_value: number;
+    raw_value: number;
+  }>;
+  generated_at: string;
+}
+
+export interface NewsSignal {
+  id: string;
+  region_code: string;
+  title: string;
+  url: string;
+  source_domain: string;
+  category: string;
+  sentiment: number;
+  confidence: number;
+  published_at: string;
+  ingested_at: string;
+}
+
+export interface NLPSummary {
+  total_signals: number;
+  by_category: Record<string, number>;
+}
+
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  allowed_regions: string[];
+  max_api_keys: number;
+  active: boolean;
+  created_at: string;
+}
+
+export interface ApiKeyOut {
+  id: string;
+  name: string;
+  prefix: string;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+export interface ApiKeyCreated extends ApiKeyOut {
+  key: string; // only returned on creation
+}
+
+export interface AuditLog {
+  id: string;
+  user_id: string | null;
+  action: string;
+  resource: string | null;
+  resource_id: string | null;
+  ip_address: string | null;
+  detail: Record<string, unknown>;
+  created_at: string;
+}
+
+export type TokenResponse = { access_token: string; expires_in: number };
+
 // ── Fetch helpers ─────────────────────────────────────────────────────
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -173,5 +317,100 @@ export const api = {
     if (endDate) params.set("end_date", endDate);
     const qs = params.toString();
     return apiFetch<BacktestResult>(`/backtest${qs ? `?${qs}` : ""}`);
+  },
+
+  // ── Alerts ────────────────────────────────────────────────────────
+  listAlertRules: () => apiFetch<AlertRule[]>("/alerts/rules"),
+  createAlertRule: (data: AlertRuleCreate) =>
+    apiFetch<AlertRule>("/alerts/rules", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  getAlertRule: (id: string) => apiFetch<AlertRule>(`/alerts/rules/${id}`),
+  updateAlertRule: (id: string, data: AlertRuleUpdate) =>
+    apiFetch<AlertRule>(`/alerts/rules/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  deleteAlertRule: (id: string) =>
+    apiFetch<void>(`/alerts/rules/${id}`, { method: "DELETE" }),
+  listAlertHistory: (limit = 50, offset = 0) =>
+    apiFetch<AlertHistory[]>(
+      `/alerts/history?limit=${limit}&offset=${offset}`,
+    ),
+  alertHistoryCount: () =>
+    apiFetch<{ count: number }>("/alerts/history/count"),
+
+  // ── Reports ───────────────────────────────────────────────────────
+  createReport: (data: ReportJobCreate) =>
+    apiFetch<ReportJob>("/reports", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  listReports: (limit = 20, offset = 0) =>
+    apiFetch<ReportJob[]>(`/reports?limit=${limit}&offset=${offset}`),
+  getReport: (id: string) => apiFetch<ReportJob>(`/reports/${id}`),
+  downloadReportUrl: (id: string) => `${BASE_URL}/reports/${id}/download`,
+
+  // ── Monitoring / Drift ────────────────────────────────────────────
+  triggerDriftCheck: () =>
+    apiFetch<{ status: string }>("/monitoring/drift-check", {
+      method: "POST",
+    }),
+  listDriftSnapshots: (
+    limit = 50,
+    offset = 0,
+    driftType?: string,
+    alertOnly?: boolean,
+  ) => {
+    const p = new URLSearchParams({
+      limit: String(limit),
+      offset: String(offset),
+    });
+    if (driftType) p.set("drift_type", driftType);
+    if (alertOnly) p.set("alert_only", "true");
+    return apiFetch<DriftSnapshot[]>(`/monitoring/drift?${p}`);
+  },
+  getDriftSnapshot: (id: string) =>
+    apiFetch<DriftSnapshot>(`/monitoring/drift/${id}`),
+  modelHealth: () => apiFetch<ModelHealthSummary>("/monitoring/health"),
+
+  // ── Explainability ────────────────────────────────────────────────
+  explain: (regionCode: string) =>
+    apiFetch<SHAPExplanation>(`/explain/${regionCode}`),
+
+  // ── NLP ───────────────────────────────────────────────────────────
+  triggerNlpScan: () =>
+    apiFetch<{ status: string }>("/nlp/scan", { method: "POST" }),
+  listNlpSignals: (limit = 50, offset = 0, regionCode?: string, category?: string) => {
+    const p = new URLSearchParams({
+      limit: String(limit),
+      offset: String(offset),
+    });
+    if (regionCode) p.set("region_code", regionCode);
+    if (category) p.set("category", category);
+    return apiFetch<NewsSignal[]>(`/nlp/signals?${p}`);
+  },
+  nlpSummary: () => apiFetch<NLPSummary>("/nlp/summary"),
+
+  // ── Organizations / API keys ──────────────────────────────────────
+  listOrganizations: () => apiFetch<Organization[]>("/organizations"),
+  listApiKeys: () => apiFetch<ApiKeyOut[]>("/api-keys"),
+  createApiKey: (name: string) =>
+    apiFetch<ApiKeyCreated>("/api-keys", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+  deleteApiKey: (id: string) =>
+    apiFetch<void>(`/api-keys/${id}`, { method: "DELETE" }),
+
+  // ── Audit ─────────────────────────────────────────────────────────
+  listAuditLogs: (limit = 50, offset = 0, resource?: string) => {
+    const p = new URLSearchParams({
+      limit: String(limit),
+      offset: String(offset),
+    });
+    if (resource) p.set("resource", resource);
+    return apiFetch<AuditLog[]>(`/audit-logs?${p}`);
   },
 } as const;

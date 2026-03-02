@@ -1,0 +1,50 @@
+{{- range $name, $job := .Values.cronJobs }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "frr.fullname" $ }}-{{ $name | kebabcase }}
+  labels:
+    {{- include "frr.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name | kebabcase }}
+spec:
+  schedule: {{ $job.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            {{- include "frr.selectorLabels" $ | nindent 12 }}
+            app.kubernetes.io/component: {{ $name | kebabcase }}
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: {{ $name | kebabcase }}
+              image: {{ $job.image | quote }}
+              command:
+                {{- toYaml $job.command | nindent 16 }}
+              envFrom:
+                {{- range $.Values.backend.envFromSecrets }}
+                - secretRef:
+                    name: {{ . }}
+                {{- end }}
+              env:
+                {{- range $key, $value := $.Values.backend.env }}
+                - name: {{ $key }}
+                  value: {{ $value | quote }}
+                {{- end }}
+                - name: FRR_DB_HOST
+                  value: {{ $.Values.timescaledb.host | quote }}
+                - name: FRR_DB_PORT
+                  value: {{ $.Values.timescaledb.port | quote }}
+                - name: FRR_DB_NAME
+                  value: {{ $.Values.timescaledb.database | quote }}
+                - name: FRR_REDIS_URL
+                  value: "redis://{{ include "frr.fullname" $ }}-redis-master:6379/0"
+              resources:
+                {{- toYaml $job.resources | nindent 16 }}
+---
+{{- end }}
