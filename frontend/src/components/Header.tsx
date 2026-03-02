@@ -1,4 +1,15 @@
+import { useAuthStore } from "../store/authStore";
+import { useNavigate } from "react-router-dom";
+
 export default function Header() {
+  const { user, logout } = useAuthStore();
+  const navigate = useNavigate();
+
+  function handleLogout() {
+    logout();
+    navigate("/login", { replace: true });
+  }
+
   return (
     <header className="glass-panel flex h-14 items-center justify-between border-b border-slate-700/50 px-6">
       <div className="flex items-center gap-3">
@@ -17,6 +28,19 @@ export default function Header() {
         <span>CESI Engine v0.3.0</span>
         <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
         <span>Live</span>
+        {user && (
+          <>
+            <span className="border-l border-slate-600 pl-4 text-gray-300">
+              {user.email}
+            </span>
+            <button
+              onClick={handleLogout}
+              className="rounded-md px-2 py-1 text-gray-400 transition-colors hover:bg-slate-700 hover:text-white"
+            >
+              Sign Out
+            </button>
+          </>
+        )}
       </div>
     </header>
   );

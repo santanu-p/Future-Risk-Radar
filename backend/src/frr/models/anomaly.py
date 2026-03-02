@@ -18,6 +18,8 @@ from typing import Deque
 
 import numpy as np
 import structlog
+from sklearn.ensemble import IsolationForest
+from sklearn.neighbors import LocalOutlierFactor
 from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +27,42 @@ from frr.config import get_settings
 from frr.db.models import AnomalyScore, SignalSeries
 
 logger = structlog.get_logger(__name__)
+
+
+def detect_secondary_outliers(
+    values: np.ndarray,
+    contamination: float = 0.08,
+) -> np.ndarray:
+    """Detect outliers using IsolationForest + LOF.
+
+    Returns a boolean mask where True indicates an outlier. For stability,
+    both models vote and at least one positive vote marks an outlier.
+    """
+    if values.ndim == 1:
+        values = values.reshape(-1, 1)
+
+    n = len(values)
+    if n < 24:
+        return np.zeros(n, dtype=bool)
+
+    # Isolation Forest
+    iso = IsolationForest(
+        n_estimators=100,
+        contamination=contamination,
+        random_state=42,
+    )
+    iso_pred = iso.fit_predict(values)  # -1 outlier, 1 inlier
+
+    # Local Outlier Factor
+    n_neighbors = max(5, min(20, n // 4))
+    lof = LocalOutlierFactor(
+        n_neighbors=n_neighbors,
+        contamination=contamination,
+    )
+    lof_pred = lof.fit_predict(values)  # -1 outlier, 1 inlier
+
+    outlier_mask = (iso_pred == -1) | (lof_pred == -1)
+    return outlier_mask.astype(bool)
 
 
 class RollingWelford:
@@ -120,8 +158,10 @@ async def compute_anomaly_scores(
     for (_source, _indicator), series in grouped.items():
         rolling = RollingWelford()
         window: Deque[tuple[datetime, float]] = deque()
+        values = np.array([s.value for s in series], dtype=float)
+        secondary_outliers = detect_secondary_outliers(values)
 
-        for s in series:
+        for idx, s in enumerate(series):
             while window and (s.ts - window[0][0]).days > baseline_window_days:
                 _, old_value = window.popleft()
                 rolling.remove(old_value)
@@ -131,7 +171,7 @@ async def compute_anomaly_scores(
             else:
                 z = 0.0
 
-            is_anomaly = abs(z) > threshold
+            is_anomaly = abs(z) > threshold or bool(secondary_outliers[idx])
             session.add(
                 AnomalyScore(
                     signal_id=s.id,

@@ -39,6 +39,9 @@ test-cov:
 test-frontend:
 	cd frontend && npm test
 
+test-e2e:
+	cd frontend && npm run e2e
+
 # ── Quality ────────────────────────────────────────────────────────────
 lint:
 	cd backend && uv run ruff check src/ tests/
@@ -61,6 +64,12 @@ train:
 
 backtest:
 	cd backend && uv run python -m frr.models.backtest
+
+validation-artifacts:
+	cd backend && uv run python scripts/publish_validation_artifacts.py
+
+load-report:
+	cd backend && uv run python scripts/summarize_locust_report.py
 
 # ── Production ─────────────────────────────────────────────────────────
 build-backend:

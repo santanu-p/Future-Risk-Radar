@@ -96,6 +96,9 @@ class BacktestResult:
     roc_results: list[ROCResult] = field(default_factory=list)
     avg_auc: float = 0.0
 
+    # Calibration
+    calibration_curves: list[dict[str, Any]] = field(default_factory=list)
+
     # Detailed
     detections: list[CrisisDetection] = field(default_factory=list)
     details: list[dict] = field(default_factory=list)
@@ -300,6 +303,56 @@ def compute_roc_metrics(
         ))
 
     return results
+
+
+def compute_calibration_curves(
+    predictions: np.ndarray,
+    labels: np.ndarray,
+    n_bins: int = 10,
+) -> list[dict[str, Any]]:
+    """Compute reliability diagram data per crisis type.
+
+    Returns per-type binned points with:
+    - mean predicted probability in the bin
+    - observed event frequency in the bin
+    - sample count in the bin
+    """
+    curves: list[dict[str, Any]] = []
+    bin_edges = np.linspace(0.0, 1.0, n_bins + 1)
+
+    for i, ct in enumerate(CRISIS_TYPE_LIST):
+        preds = predictions[:, i]
+        actual = labels[:, i]
+        points: list[dict[str, Any]] = []
+
+        for b in range(n_bins):
+            lo = float(bin_edges[b])
+            hi = float(bin_edges[b + 1])
+            if b == n_bins - 1:
+                mask = (preds >= lo) & (preds <= hi)
+            else:
+                mask = (preds >= lo) & (preds < hi)
+
+            count = int(mask.sum())
+            if count == 0:
+                continue
+
+            avg_pred = float(np.mean(preds[mask]))
+            observed_freq = float(np.mean(actual[mask]))
+
+            points.append(
+                {
+                    "bin_lower": lo,
+                    "bin_upper": hi,
+                    "avg_pred": round(avg_pred, 5),
+                    "observed_freq": round(observed_freq, 5),
+                    "n_samples": count,
+                }
+            )
+
+        curves.append({"crisis_type": ct.value, "points": points})
+
+    return curves
 
 
 # ── Known crisis validation ───────────────────────────────────────────
@@ -542,6 +595,7 @@ async def run_full_backtest(
 
             result.roc_results = compute_roc_metrics(preds_arr, labels_arr)
             result.avg_auc = float(np.mean([r.auc for r in result.roc_results]))
+            result.calibration_curves = compute_calibration_curves(preds_arr, labels_arr)
 
         # Validate known crises
         result.known_crisis_validations = await validate_known_crises(session, cesi_threshold=60.0)

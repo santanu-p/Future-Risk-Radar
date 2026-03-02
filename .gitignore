@@ -21,6 +21,7 @@ frontend/.vite/
 # IDE
 .vscode/
 .github/prompts/
+.github/copilot-instructions.md
 .idea/
 *.swp
 *.swo

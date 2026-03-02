@@ -20,6 +20,7 @@ dev-dependencies = [
     "mypy>=1.13",
     "factory-boy>=3.3",
     "respx>=0.22",
+    "locust>=2.31",
 ]
 
 [build-system]
@@ -61,7 +62,6 @@ scikit-learn = ">=1.6"
 pyarrow = ">=18.0"
 
 # Scheduling
-celery = { version = ">=5.4", extras = ["redis"] }
 apscheduler = ">=3.10"
 
 # HTTP clients

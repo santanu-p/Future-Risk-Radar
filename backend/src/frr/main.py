@@ -90,6 +90,7 @@ def create_app() -> FastAPI:
     from frr.api.monitoring import router as monitoring_router
     from frr.api.explainability import router as explain_router
     from frr.api.nlp import router as nlp_router
+    from frr.api.features import router as features_router
 
     prefix = f"/api/{settings.api_version}"
     app.include_router(health_router, tags=["health"])
@@ -105,6 +106,7 @@ def create_app() -> FastAPI:
     app.include_router(monitoring_router, prefix=prefix, tags=["monitoring"])
     app.include_router(explain_router, prefix=prefix, tags=["explainability"])
     app.include_router(nlp_router, prefix=prefix, tags=["nlp"])
+    app.include_router(features_router, prefix=prefix, tags=["features"])
     app.include_router(ws_router, tags=["websocket"])
 
     # ── Audit logging middleware ───────────────────────────────────────

@@ -1,0 +1,30 @@
+# Prometheus configuration for Future Risk Radar
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+scrape_configs:
+  # ── FRR Backend API ──────────────────────────────────────────────────
+  - job_name: "frr-backend"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["backend:8000"]
+        labels:
+          service: "frr-backend"
+          environment: "dev"
+
+  # ── Prometheus self-monitoring ───────────────────────────────────────
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # ── Redis exporter (optional — add redis-exporter service) ──────────
+  # - job_name: "redis"
+  #   static_configs:
+  #     - targets: ["redis-exporter:9121"]
+
+  # ── PostgreSQL exporter (optional — add pg-exporter service) ────────
+  # - job_name: "postgres"
+  #   static_configs:
+  #     - targets: ["postgres-exporter:9187"]

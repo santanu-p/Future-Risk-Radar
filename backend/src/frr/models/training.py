@@ -777,6 +777,54 @@ async def train_pipeline(
         torch.save(lstm_model.state_dict(), model_dir / "lstm.pt")
         logger.info("LSTM model saved", path=str(model_dir / "lstm.pt"))
 
+    # ── MLflow experiment tracking ─────────────────────────────────────
+    try:
+        import mlflow
+
+        mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
+        mlflow.set_experiment("FRR-Training")
+
+        with mlflow.start_run(run_name=f"train-{model_version}"):
+            # Log hyperparameters
+            mlflow.log_params({
+                "model_version": model_version,
+                "lookback_months": settings.model_lookback_months,
+                "forecast_horizon_months": settings.model_forecast_horizon_months,
+                "gnn_embedding_dim": settings.model_gnn_embedding_dim,
+                "lstm_hidden_dim": settings.model_lstm_hidden_dim,
+                "lstm_num_layers": settings.model_lstm_num_layers,
+                "bayesian_num_samples": settings.model_bayesian_num_samples,
+                "num_features": num_features,
+                "training_samples": lstm_sequences.shape[0],
+                "retrain_gat": retrain_gat,
+                "retrain_lstm": retrain_lstm,
+                "retrain_bayesian": retrain_bayesian,
+            })
+
+            # Log per-stage metrics
+            for stage, metrics in results.items():
+                if isinstance(metrics, dict) and "error" not in metrics:
+                    for key, val in metrics.items():
+                        if isinstance(val, (int, float)):
+                            mlflow.log_metric(f"{stage}_{key}", val)
+
+            # Log model artifacts
+            if (model_dir / "gat.pt").exists():
+                mlflow.log_artifact(str(model_dir / "gat.pt"), "models")
+            if (model_dir / "lstm.pt").exists():
+                mlflow.log_artifact(str(model_dir / "lstm.pt"), "models")
+
+            # Tag the run
+            mlflow.set_tags({
+                "pipeline": "train",
+                "version": model_version,
+                "stages": ",".join(results.keys()),
+            })
+
+        logger.info("MLflow run logged", version=model_version)
+    except Exception as e:
+        logger.warning("MLflow logging failed (non-fatal)", error=str(e))
+
     # ── Generate & persist predictions ─────────────────────────────────
     if lstm_model is not None:
         async with factory() as session:
