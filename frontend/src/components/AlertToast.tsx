@@ -25,7 +25,7 @@ export default function AlertToast() {
     ]);
   }, []);
 
-  const { status } = useAlertsWS(handleAlert);
+  useAlertsWS(handleAlert);
 
   // Auto-dismiss
   useEffect(() => {

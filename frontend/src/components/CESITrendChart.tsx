@@ -88,7 +88,19 @@ export default function CESITrendChart({
     );
   }
 
-  const latestSeverity = parsed[parsed.length - 1]?.severity ?? "stable";
+  const latestPoint = parsed[parsed.length - 1];
+  if (!latestPoint) {
+    return (
+      <div
+        className="flex items-center justify-center text-sm text-gray-500"
+        style={{ width, height }}
+      >
+        Not enough data for trend chart
+      </div>
+    );
+  }
+
+  const latestSeverity = latestPoint.severity;
   const [r, g, b] = severityColor(latestSeverity);
 
   const xTicks = xScale.ticks(5);
@@ -156,18 +168,16 @@ export default function CESITrendChart({
           })}
 
         {/* Latest value label */}
-        {parsed.length > 0 && (
-          <text
-            x={innerW + 6}
-            y={yScale(parsed[parsed.length - 1].score)}
-            fill={`rgb(${r},${g},${b})`}
-            fontSize={12}
-            fontWeight={700}
-            dominantBaseline="middle"
-          >
-            {parsed[parsed.length - 1].score.toFixed(1)}
-          </text>
-        )}
+        <text
+          x={innerW + 6}
+          y={yScale(latestPoint.score)}
+          fill={`rgb(${r},${g},${b})`}
+          fontSize={12}
+          fontWeight={700}
+          dominantBaseline="middle"
+        >
+          {latestPoint.score.toFixed(1)}
+        </text>
 
         {/* Axes */}
         {showAxes && (

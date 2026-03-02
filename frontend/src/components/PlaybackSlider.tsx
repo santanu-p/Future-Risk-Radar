@@ -73,7 +73,11 @@ export default function PlaybackSlider({
 
   if (parsed.length < 2) return null;
 
-  const current = parsed[currentIndex] ?? parsed[0];
+  const first = parsed[0];
+  const last = parsed[parsed.length - 1];
+  if (!first || !last) return null;
+
+  const current = parsed[currentIndex] ?? first;
   const dateLabel = d3.timeFormat("%b %d, %Y")(current.date);
   const thumbX = xScale(currentIndex);
 
@@ -121,13 +125,13 @@ export default function PlaybackSlider({
       {/* Date & score label */}
       <div className="flex items-center justify-between mt-1 px-3">
         <span className="text-xs text-gray-500">
-          {d3.timeFormat("%b %Y")(parsed[0].date)}
+          {d3.timeFormat("%b %Y")(first.date)}
         </span>
         <span className="text-xs font-medium text-blue-400">
           {dateLabel} — CESI {current.score.toFixed(1)}
         </span>
         <span className="text-xs text-gray-500">
-          {d3.timeFormat("%b %Y")(parsed[parsed.length - 1].date)}
+          {d3.timeFormat("%b %Y")(last.date)}
         </span>
       </div>
     </div>

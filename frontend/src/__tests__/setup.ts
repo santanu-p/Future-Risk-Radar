@@ -1,4 +1,5 @@
 import "@testing-library/jest-dom/vitest";
+import { vi } from "vitest";
 
 // Mock maplibre-gl which isn't available in jsdom
 vi.mock("maplibre-gl", () => ({
