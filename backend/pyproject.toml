@@ -6,6 +6,75 @@ requires-python = ">=3.12"
 license = "AGPL-3.0-only"
 authors = [{ name = "FRR Team" }]
 readme = "../README.md"
+dependencies = [
+    # Web framework
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+
+    # Database
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.30",
+    "alembic>=1.14",
+
+    # Cache & messaging
+    "redis[hiredis]>=5.2",
+
+    # ML core
+    "torch>=2.5",
+    "jax[cpu]>=0.4.38",
+    "numpyro>=0.16",
+
+    # GNN
+    "torch-geometric>=2.6",
+
+    # Data processing
+    "numpy>=1.26",
+    "pandas>=2.2",
+    "scipy>=1.14",
+    "scikit-learn>=1.6",
+    "pyarrow>=18.0",
+
+    # Scheduling
+    "apscheduler>=3.10",
+
+    # HTTP clients
+    "httpx>=0.27",
+    "aiohttp>=3.11",
+
+    # WebSocket
+    "websockets>=13.0",
+
+    # Explainability
+    "shap>=0.46",
+
+    # Model registry
+    "mlflow>=2.19",
+
+    # Object storage
+    "boto3>=1.35",
+
+    # Monitoring
+    "prometheus-client>=0.21",
+
+    # Auth
+    "python-jose[cryptography]>=3.3",
+    "passlib[bcrypt]>=1.7",
+
+    # PDF report generation
+    "jinja2>=3.1",
+    "weasyprint>=62.0",
+
+    # Email
+    "aiosmtplib>=3.0",
+
+    # Utilities
+    "orjson>=3.10",
+    "python-dotenv>=1.0",
+    "structlog>=24.4",
+    "tenacity>=9.0",
+]
 
 [project.scripts]
 frr = "frr.main:cli"
@@ -29,80 +98,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/frr"]
-
-# ── Dependencies ───────────────────────────────────────────────────────
-[project.dependencies]
-# Web framework
-fastapi = ">=0.115"
-uvicorn = { version = ">=0.34", extras = ["standard"] }
-pydantic = ">=2.10"
-pydantic-settings = ">=2.7"
-
-# Database
-sqlalchemy = { version = ">=2.0", extras = ["asyncio"] }
-asyncpg = ">=0.30"
-alembic = ">=1.14"
-
-# Cache & messaging
-redis = { version = ">=5.2", extras = ["hiredis"] }
-
-# ML core
-torch = ">=2.5"
-jax = { version = ">=0.4.38", extras = ["cpu"] }
-numpyro = ">=0.16"
-
-# GNN
-torch-geometric = ">=2.6"
-
-# Data processing
-numpy = ">=1.26"
-pandas = ">=2.2"
-scipy = ">=1.14"
-scikit-learn = ">=1.6"
-pyarrow = ">=18.0"
-
-# Scheduling
-apscheduler = ">=3.10"
-
-# HTTP clients
-httpx = ">=0.27"
-aiohttp = ">=3.11"
-
-# WebSocket
-websockets = ">=13.0"
-
-# Explainability
-shap = ">=0.46"
-
-# Model registry
-mlflow = ">=2.19"
-
-# Object storage
-boto3 = ">=1.35"
-
-# Monitoring
-prometheus-client = ">=0.21"
-
-# Auth
-python-jose = { version = ">=3.3", extras = ["cryptography"] }
-passlib = { version = ">=1.7", extras = ["bcrypt"] }
-
-# PDF report generation
-jinja2 = ">=3.1"
-weasyprint = ">=62.0"
-
-# Email
-aiosmtplib = ">=3.0"
-
-# NLP
-transformers = { version = ">=4.45", optional = true }
-tokenizers = { version = ">=0.20", optional = true }
-
-# Utilities
-orjson = ">=3.10"
-python-dotenv = ">=1.0"
-structlog = ">=24.4"
-tenacity = ">=9.0"
 
 [project.optional-dependencies]
 nlp = ["transformers>=4.45", "tokenizers>=0.20"]
