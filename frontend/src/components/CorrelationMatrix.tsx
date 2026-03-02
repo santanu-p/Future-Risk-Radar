@@ -32,31 +32,45 @@ function computeCorrelationMatrix(
   const matrix: number[][] = Array.from({ length: n }, () => Array(n).fill(0));
 
   for (let i = 0; i < n; i++) {
+    const row = matrix[i];
+    const labelI = labels[i];
+    if (!row || !labelI) continue;
+
     for (let j = 0; j < n; j++) {
+      const labelJ = labels[j];
+      if (!labelJ) continue;
+
       if (i === j) {
-        matrix[i][j] = 1;
+        row[j] = 1;
         continue;
       }
-      const a = layerHistory[labels[i]];
-      const b = layerHistory[labels[j]];
+      const a = layerHistory[labelI];
+      const b = layerHistory[labelJ];
+      if (!a || !b) {
+        row[j] = 0;
+        continue;
+      }
       const len = Math.min(a.length, b.length);
       if (len < 3) {
-        matrix[i][j] = 0;
+        row[j] = 0;
         continue;
       }
       // Pearson correlation
-      const meanA = a.slice(0, len).reduce((s, v) => s + v, 0) / len;
-      const meanB = b.slice(0, len).reduce((s, v) => s + v, 0) / len;
+      const meanA = a.slice(0, len).reduce((s: number, v: number) => s + v, 0) / len;
+      const meanB = b.slice(0, len).reduce((s: number, v: number) => s + v, 0) / len;
       let num = 0, denA = 0, denB = 0;
       for (let k = 0; k < len; k++) {
-        const da = a[k] - meanA;
-        const db = b[k] - meanB;
+        const av = a[k];
+        const bv = b[k];
+        if (av === undefined || bv === undefined) continue;
+        const da = av - meanA;
+        const db = bv - meanB;
         num += da * db;
         denA += da * da;
         denB += db * db;
       }
       const den = Math.sqrt(denA) * Math.sqrt(denB);
-      matrix[i][j] = den === 0 ? 0 : num / den;
+      row[j] = den === 0 ? 0 : num / den;
     }
   }
 
@@ -70,17 +84,22 @@ function matrixFromSinglePoint(layerScores: Record<string, LayerScore>): {
 } {
   const labels = Object.keys(layerScores).sort();
   const n = labels.length;
-  const vals = labels.map((l) => layerScores[l].contribution);
+  const vals = labels.map((l) => layerScores[l]?.contribution ?? 0);
   const matrix: number[][] = Array.from({ length: n }, () => Array(n).fill(0));
 
   for (let i = 0; i < n; i++) {
+    const row = matrix[i];
+    const vi = vals[i] ?? 0;
+    if (!row) continue;
+
     for (let j = 0; j < n; j++) {
       if (i === j) {
-        matrix[i][j] = 1;
+        row[j] = 1;
       } else {
         // Normalised product as rough proxy
         const maxV = Math.max(...vals.map(Math.abs), 1);
-        matrix[i][j] = (vals[i] * vals[j]) / (maxV * maxV);
+        const vj = vals[j] ?? 0;
+        row[j] = (vi * vj) / (maxV * maxV);
       }
     }
   }
@@ -110,6 +129,13 @@ export default function CorrelationMatrix({
   const colorScale = d3
     .scaleSequential(d3.interpolateRdBu)
     .domain([1, -1]); // Reversed so red = positive correlation
+
+  const hoveredI = hovered?.i;
+  const hoveredJ = hovered?.j;
+  const hoveredRow = hoveredI !== undefined ? matrix[hoveredI] : undefined;
+  const hoveredValue = hoveredRow && hoveredJ !== undefined ? hoveredRow[hoveredJ] : undefined;
+  const hoveredLabelI = hoveredI !== undefined ? labels[hoveredI] : undefined;
+  const hoveredLabelJ = hoveredJ !== undefined ? labels[hoveredJ] : undefined;
 
   return (
     <div className="relative">
@@ -187,17 +213,17 @@ export default function CorrelationMatrix({
       </svg>
 
       {/* Tooltip */}
-      {hovered && (
+      {hovered && hoveredLabelI && hoveredLabelJ && hoveredValue !== undefined && (
         <div className="absolute top-0 right-0 glass-panel px-2 py-1 text-xs">
           <span className="text-gray-400">
-            {LAYER_LABELS[labels[hovered.i]] ?? labels[hovered.i]}
+            {LAYER_LABELS[hoveredLabelI] ?? hoveredLabelI}
           </span>
           {" × "}
           <span className="text-gray-400">
-            {LAYER_LABELS[labels[hovered.j]] ?? labels[hovered.j]}
+            {LAYER_LABELS[hoveredLabelJ] ?? hoveredLabelJ}
           </span>
           <span className="ml-2 font-mono font-bold text-white">
-            {matrix[hovered.i][hovered.j].toFixed(3)}
+            {hoveredValue.toFixed(3)}
           </span>
         </div>
       )}
