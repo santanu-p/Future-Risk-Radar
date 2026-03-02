@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type RegionSummary } from "../api/client";
+import { api } from "../api/client";
 import GlobeView from "../components/GlobeView";
 import CESIPanel from "../components/CESIPanel";
 import { useCesiScoresWS } from "../hooks/useWebSocket";

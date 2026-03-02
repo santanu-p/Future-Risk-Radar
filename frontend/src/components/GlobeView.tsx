@@ -1,14 +1,10 @@
 import { useMemo, useCallback } from "react";
-import { DeckGL } from "@deck.gl/core";
+import DeckGL from "@deck.gl/react";
 import { ScatterplotLayer, TextLayer } from "@deck.gl/layers";
-import { Map as MapLibreMap } from "maplibre-gl";
 import { useNavigate } from "react-router-dom";
 import type { RegionSummary } from "../api/client";
 import { useAppStore } from "../store/appStore";
 import { severityColor } from "../lib/utils";
-
-const MAP_STYLE =
-  "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
 interface Props {
   regions: RegionSummary[];
@@ -104,9 +100,6 @@ export default function GlobeView({ regions }: Props) {
           },
         };
       }}
-    >
-      {/* @ts-expect-error MapLibre typing */}
-      <MapLibreMap mapStyle={MAP_STYLE} />
-    </DeckGL>
+    />
   );
 }

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
-import { api, type SHAPExplanation } from "../api/client";
+import { api } from "../api/client";
 
 /* ── Waterfall bar (single feature) ──────────────────────────────── */
 function WaterfallBar({
