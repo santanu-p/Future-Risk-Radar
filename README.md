@@ -2,6 +2,9 @@
 
 **Predictive Global Risk Intelligence Platform**
 
+[![CI](https://github.com/santanu-p/Future-Risk-Radar/actions/workflows/ci.yml/badge.svg)](https://github.com/santanu-p/Future-Risk-Radar/actions/workflows/ci.yml)
+[![License: AGPL-3.0-only](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](./LICENSE)
+
 A structural stress detection system that detects weak global signals and estimates the probability of economic instability in a given region within 12 months. This is NOT a news tracker — it is a forward-looking predictive intelligence system.
 
 ## Core Output
@@ -29,7 +32,7 @@ Data Ingestion → Normalization → Anomaly Detection → GNN Correlation → B
 
 ```bash
 # Clone
-git clone <repo-url> && cd sp-monitor
+git clone https://github.com/santanu-p/Future-Risk-Radar.git && cd Future-Risk-Radar
 
 # Start all services (TimescaleDB, Redis, MinIO, backend, frontend)
 docker compose up -d
@@ -37,6 +40,26 @@ docker compose up -d
 # Or run backend/frontend individually:
 cd backend && uv sync && uv run uvicorn frr.main:app --reload
 cd frontend && npm install && npm run dev
+```
+
+## Contributing
+
+We welcome community contributions.
+
+- Start here: [`CONTRIBUTING.md`](./CONTRIBUTING.md)
+- Community standards: [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md)
+- Security reporting: [`SECURITY.md`](./SECURITY.md)
+- Support channels: [`SUPPORT.md`](./SUPPORT.md)
+- Governance: [`GOVERNANCE.md`](./GOVERNANCE.md)
+
+### Developer commands
+
+```bash
+make up
+make lint
+make typecheck
+make test
+make test-frontend
 ```
 
 ## Project Structure
@@ -75,4 +98,4 @@ sp-monitor/
 
 ## License
 
-AGPL-3.0
+AGPL-3.0-only. See [`LICENSE`](./LICENSE).

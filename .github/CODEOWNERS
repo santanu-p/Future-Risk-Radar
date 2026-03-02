@@ -1,0 +1,12 @@
+# Default owner for all files
+* @santanu-p
+
+# Backend
+/backend/ @santanu-p
+
+# Frontend
+/frontend/ @santanu-p
+
+# Infrastructure and CI
+/.github/ @santanu-p
+/infra/ @santanu-p

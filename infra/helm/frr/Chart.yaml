@@ -12,9 +12,9 @@ keywords:
   - fastapi
 maintainers:
   - name: FRR Team
-home: https://github.com/your-org/future-risk-radar
+home: https://github.com/santanu-p/Future-Risk-Radar
 sources:
-  - https://github.com/your-org/future-risk-radar
+  - https://github.com/santanu-p/Future-Risk-Radar
 dependencies:
   - name: redis
     version: "18.x.x"
