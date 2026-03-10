@@ -111,7 +111,7 @@ export default function CESITrendChart({
       <g transform={`translate(${margin.left},${margin.top})`}>
         {/* Severity bands */}
         {SEVERITY_BANDS.map((band, i) => {
-          const prevMax = i > 0 ? SEVERITY_BANDS[i - 1].max : 0;
+          const prevMax = i > 0 ? (SEVERITY_BANDS[i - 1]?.max ?? 0) : 0;
           const y1 = yScale(band.max);
           const y2 = yScale(prevMax);
           return (
