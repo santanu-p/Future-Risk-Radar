@@ -56,7 +56,7 @@ const MAX_BACKOFF_MS = 30_000;
 export function useWebSocket({ path, onMessage, enabled = true }: UseWebSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const backoffRef = useRef(1_000);
-  const reconnectTimer = useRef<ReturnType<typeof setTimeout>>();
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [status, setStatus] = useState<ConnectionStatus>("disconnected");
 
   const connect = useCallback(() => {
@@ -98,7 +98,9 @@ export function useWebSocket({ path, onMessage, enabled = true }: UseWebSocketOp
   useEffect(() => {
     connect();
     return () => {
-      clearTimeout(reconnectTimer.current);
+      if (reconnectTimer.current !== null) {
+        clearTimeout(reconnectTimer.current);
+      }
       wsRef.current?.close();
     };
   }, [connect]);
