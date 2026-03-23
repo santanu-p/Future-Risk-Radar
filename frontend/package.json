@@ -22,7 +22,7 @@
     "@deck.gl/mesh-layers": "^9.2.11",
     "@deck.gl/react": "^9.2.11",
     "@luma.gl/core": "^9.1.0",
-    "@tanstack/react-query": "^5.64.0",
+    "@tanstack/react-query": "^5.95.2",
     "d3": "^7.9.0",
     "maplibre-gl": "^4.7.0",
     "react": "^19.0.0",
