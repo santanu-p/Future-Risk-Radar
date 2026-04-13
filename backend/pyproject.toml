@@ -71,7 +71,7 @@ dependencies = [
 
     # Utilities
     "orjson>=3.10",
-    "python-dotenv>=1.0",
+    "python-dotenv>=1.2.2",
     "structlog>=24.4",
     "tenacity>=9.0",
 ]
