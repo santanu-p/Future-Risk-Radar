@@ -34,7 +34,7 @@ dependencies = [
     "pandas>=2.2",
     "scipy>=1.14",
     "scikit-learn>=1.6",
-    "pyarrow>=18.0",
+    "pyarrow>=23.0.1",
 
     # Scheduling
     "apscheduler>=3.10",
