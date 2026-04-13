@@ -27,7 +27,7 @@ dependencies = [
     "numpyro>=0.16",
 
     # GNN
-    "torch-geometric>=2.6",
+    "torch-geometric>=2.7.0",
 
     # Data processing
     "numpy>=1.26",
