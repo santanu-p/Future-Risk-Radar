@@ -100,7 +100,7 @@ build-backend = "hatchling.build"
 packages = ["src/frr"]
 
 [project.optional-dependencies]
-nlp = ["transformers>=4.45", "tokenizers>=0.20"]
+nlp = ["transformers>=4.45", "tokenizers>=0.22.2"]
 
 # ── Tool Configuration ─────────────────────────────────────────────────
 [tool.ruff]
